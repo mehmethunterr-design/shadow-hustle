@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 class Player extends PositionComponent {
   Player({required super.position})
       : super(
-          size: Vector2(68, 88),
+          size: Vector2(74, 96),
           anchor: Anchor.center,
           priority: 10,
         );
@@ -16,7 +16,7 @@ class Player extends PositionComponent {
   final Vector2 keyboardMovement = Vector2.zero();
   final Vector2 joystickMovement = Vector2.zero();
 
-  final double speed = 230;
+  final double speed = 245;
   final math.Random _random = math.Random();
 
   List<Rect> obstacles = [];
@@ -52,16 +52,14 @@ class Player extends PositionComponent {
       facingRight = true;
     }
 
-    if (!keyboardMovement.isZero()) {
-      keyboardMovement.normalize();
-    }
+    if (!keyboardMovement.isZero()) keyboardMovement.normalize();
   }
 
   Rect collisionRectAt(Vector2 newPosition) {
     return Rect.fromCenter(
-      center: Offset(newPosition.x, newPosition.y + 25),
-      width: 34,
-      height: 26,
+      center: Offset(newPosition.x, newPosition.y + 28),
+      width: 36,
+      height: 28,
     );
   }
 
@@ -101,11 +99,7 @@ class Player extends PositionComponent {
       !joystickMovement.isZero() ? joystickMovement : keyboardMovement,
     );
 
-    if (isMoving) {
-      animationTime += dt * 10;
-    } else {
-      animationTime += dt * 2.2;
-    }
+    animationTime += dt * (isMoving ? 11.5 : 2.0);
 
     final displacement = movement * speed * dt;
     final nextX = Vector2(position.x + displacement.x, position.y);
@@ -123,9 +117,9 @@ class Player extends PositionComponent {
     super.render(canvas);
 
     final walk = isMoving ? math.sin(animationTime) : 0.0;
-    final bob = isMoving ? walk.abs() * -3.2 : math.sin(idleTime * 2) * 0.8;
-    final tilt = isMoving ? walk * 0.045 : math.sin(idleTime * 1.4) * 0.008;
-    final breathe = isMoving ? 1.0 : 1 + math.sin(idleTime * 2) * 0.018;
+    final bob = isMoving ? -walk.abs() * 3.6 : math.sin(idleTime * 2) * 0.75;
+    final tilt = isMoving ? walk * 0.04 : math.sin(idleTime * 1.3) * 0.008;
+    final breathe = isMoving ? 1.0 : 1 + math.sin(idleTime * 2) * 0.014;
     final squashX = isMoving ? 1 + walk.abs() * 0.025 : 1.0;
     final squashY = isMoving ? 1 - walk.abs() * 0.025 : 1.0;
 
@@ -137,156 +131,275 @@ class Player extends PositionComponent {
     canvas.scale(facingRight ? squashX : -squashX, squashY);
     canvas.translate(-size.x / 2, -size.y / 2);
 
+    _drawCrossedSwords(canvas);
     _drawBackArm(canvas, walk);
     _drawLegs(canvas, walk);
     _drawBody(canvas, breathe);
     _drawFrontArm(canvas, walk);
     _drawHead(canvas);
+    _drawHeadbandTails(canvas, walk);
 
     canvas.restore();
   }
 
   void _drawGroundShadow(Canvas canvas, double walk) {
-    final center = Offset(size.x / 2, size.y - 4);
+    final center = Offset(size.x / 2, size.y - 5);
     canvas.drawOval(
-      Rect.fromCenter(center: center, width: 50 - walk.abs() * 4, height: 16),
-      Paint()..color = const Color(0x18000000),
+      Rect.fromCenter(
+        center: center,
+        width: 54 - walk.abs() * 5,
+        height: 16,
+      ),
+      Paint()..color = const Color(0x19000000),
     );
     canvas.drawOval(
-      Rect.fromCenter(center: center, width: 38 - walk.abs() * 3, height: 10),
+      Rect.fromCenter(
+        center: center,
+        width: 40 - walk.abs() * 4,
+        height: 10,
+      ),
       Paint()
-        ..color = const Color(0x30000000)
+        ..color = const Color(0x3B000000)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
   }
 
-  void _drawLegs(Canvas canvas, double walk) {
-    final step = isMoving ? walk * 5.5 : 0.0;
-    final legPaint = Paint()..color = const Color(0xFF35324B);
-    final shoePaint = Paint()..color = const Color(0xFF20202A);
-
-    _drawLimb(canvas, const Offset(24, 62), 13, step, legPaint, shoePaint);
-    _drawLimb(canvas, const Offset(42, 62), 13, -step, legPaint, shoePaint);
+  void _drawCrossedSwords(Canvas canvas) {
+    _drawSword(canvas, const Offset(27, 16), 0.58);
+    _drawSword(canvas, const Offset(47, 16), -0.58);
   }
 
-  void _drawLimb(
-    Canvas canvas,
-    Offset origin,
-    double length,
-    double swing,
-    Paint limb,
-    Paint shoe,
-  ) {
+  void _drawSword(Canvas canvas, Offset origin, double angle) {
     canvas.save();
     canvas.translate(origin.dx, origin.dy);
-    canvas.rotate(swing * 0.035);
+    canvas.rotate(angle);
+
+    final sheath = Paint()..color = const Color(0xFF20242C);
+    final red = Paint()..color = const Color(0xFFB41F24);
+    final gold = Paint()..color = const Color(0xFFC99B55);
+
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(-4.5, 0, 9, length), const Radius.circular(5)),
-      limb,
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-3, 0, 6, 55),
+        const Radius.circular(3),
+      ),
+      sheath,
     );
+    canvas.drawRect(const Rect.fromLTWH(-6, 7, 12, 4), gold);
+    for (double y = 14; y < 48; y += 9) {
+      canvas.drawRect(Rect.fromLTWH(-3, y, 6, 3), red);
+    }
+    canvas.restore();
+  }
+
+  void _drawLegs(Canvas canvas, double walk) {
+    final step = isMoving ? walk * 5.8 : 0.0;
+    _drawLeg(canvas, const Offset(27, 68), step);
+    _drawLeg(canvas, const Offset(47, 68), -step);
+  }
+
+  void _drawLeg(Canvas canvas, Offset origin, double swing) {
+    final trousers = Paint()..color = const Color(0xFF202329);
+    final boots = Paint()..color = const Color(0xFF16181D);
+    final red = Paint()..color = const Color(0xFF9F2024);
+
+    canvas.save();
+    canvas.translate(origin.dx, origin.dy);
+    canvas.rotate(swing * 0.034);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(-5, length - 2, 12, 6), const Radius.circular(4)),
-      shoe,
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-5, 0, 10, 16),
+        const Radius.circular(5),
+      ),
+      trousers,
     );
+    canvas.drawRect(const Rect.fromLTWH(-5, 8, 10, 3), red);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-6, 13, 14, 8),
+        const Radius.circular(4),
+      ),
+      boots,
+    );
+    canvas.drawRect(const Rect.fromLTWH(-5, 16, 12, 2), red);
     canvas.restore();
   }
 
   void _drawBackArm(Canvas canvas, double walk) {
-    _drawArm(canvas, const Offset(14, 41), isMoving ? -walk * 0.36 : -0.05, false);
+    _drawArm(
+      canvas,
+      const Offset(17, 43),
+      isMoving ? -walk * 0.38 : -0.06,
+      false,
+    );
   }
 
   void _drawFrontArm(Canvas canvas, double walk) {
-    _drawArm(canvas, const Offset(54, 41), isMoving ? walk * 0.36 : 0.05, true);
+    _drawArm(
+      canvas,
+      const Offset(57, 43),
+      isMoving ? walk * 0.38 : 0.06,
+      true,
+    );
   }
 
   void _drawArm(Canvas canvas, Offset shoulder, double angle, bool front) {
+    final sleeve = Paint()
+      ..color = front ? const Color(0xFF25282F) : const Color(0xFF1B1D23);
+    final glove = Paint()..color = const Color(0xFF17191E);
+    final red = Paint()..color = const Color(0xFFB0262B);
+
     canvas.save();
     canvas.translate(shoulder.dx, shoulder.dy);
     canvas.rotate(angle);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(-5, 0, 10, 25), const Radius.circular(6)),
-      Paint()..color = front ? const Color(0xFF6D45E8) : const Color(0xFF5937C7),
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-5, 0, 10, 27),
+        const Radius.circular(6),
+      ),
+      sleeve,
     );
-    canvas.drawCircle(const Offset(0, 25), 5, Paint()..color = const Color(0xFFFFCBAA));
+    canvas.drawRect(const Rect.fromLTWH(-5, 10, 10, 4), red);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-5, 22, 10, 9),
+        const Radius.circular(5),
+      ),
+      glove,
+    );
     canvas.restore();
   }
 
   void _drawBody(Canvas canvas, double breathe) {
     canvas.save();
-    canvas.translate(34, 48);
+    canvas.translate(37, 53);
     canvas.scale(breathe, breathe);
-    canvas.translate(-34, -48);
+    canvas.translate(-37, -53);
 
-    final bodyRect = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(12, 31, 44, 39),
-      const Radius.circular(18),
+    final body = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(14, 32, 46, 43),
+      const Radius.circular(17),
     );
-    canvas.drawRRect(bodyRect, Paint()..color = const Color(0xFF754CFA));
+    canvas.drawRRect(body, Paint()..color = const Color(0xFF202329));
 
     canvas.save();
-    canvas.clipRRect(bodyRect);
+    canvas.clipRRect(body);
     canvas.drawOval(
-      const Rect.fromLTWH(13, 30, 25, 42),
-      Paint()..color = const Color(0xFF9A7DFF),
+      const Rect.fromLTWH(14, 30, 25, 47),
+      Paint()..color = const Color(0xFF343840),
     );
     canvas.drawOval(
-      const Rect.fromLTWH(40, 32, 21, 40),
-      Paint()..color = const Color(0xFF5E38D8),
+      const Rect.fromLTWH(45, 31, 22, 47),
+      Paint()..color = const Color(0xFF14161B),
     );
     canvas.restore();
 
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(28, 35, 12, 23), const Radius.circular(8)),
-      Paint()..color = const Color(0xFFB29CFF),
+    final sash = Paint()..color = const Color(0xFFB3262B);
+    final gold = Paint()..color = const Color(0xFFC69A58);
+    canvas.drawLine(
+      const Offset(21, 34),
+      const Offset(52, 68),
+      Paint()
+        ..color = const Color(0xFF8E1E23)
+        ..strokeWidth = 7
+        ..strokeCap = StrokeCap.round,
     );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(15, 61, 45, 8),
+        const Radius.circular(4),
+      ),
+      sash,
+    );
+    canvas.drawCircle(const Offset(37, 65), 5, gold);
+
+    final hangingSash = Path()
+      ..moveTo(38, 68)
+      ..lineTo(48, 68)
+      ..lineTo(45, 89)
+      ..lineTo(36, 78)
+      ..close();
+    canvas.drawPath(hangingSash, Paint()..color = const Color(0xFF9B1F24));
+
     canvas.restore();
   }
 
   void _drawHead(Canvas canvas) {
-    canvas.drawCircle(const Offset(34, 22), 21, Paint()..color = const Color(0xFFFFCFAF));
-    canvas.drawCircle(const Offset(27, 17), 12, Paint()..color = const Color(0xFFFFE0C8));
+    final skin = Paint()..color = const Color(0xFFC9966B);
+    canvas.drawCircle(const Offset(37, 23), 22, skin);
+    canvas.drawCircle(
+      const Offset(30, 17),
+      12,
+      Paint()..color = const Color(0xFFDDB184),
+    );
 
-    final hair = Paint()..color = const Color(0xFF3A2A25);
-    canvas.drawArc(const Rect.fromLTWH(13, 0, 42, 38), math.pi, math.pi, true, hair);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(15, 7, 11, 19), const Radius.circular(7)),
+    final hair = Paint()..color = const Color(0xFF171719);
+    canvas.drawArc(
+      const Rect.fromLTWH(15, 0, 44, 38),
+      math.pi,
+      math.pi,
+      true,
       hair,
     );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(46, 8, 8, 16), const Radius.circular(6)),
-      hair,
+    canvas.drawOval(const Rect.fromLTWH(16, 4, 18, 16), hair);
+    canvas.drawOval(const Rect.fromLTWH(29, -1, 19, 17), hair);
+    canvas.drawOval(const Rect.fromLTWH(43, 3, 17, 17), hair);
+
+    final mask = Path()
+      ..moveTo(17, 25)
+      ..quadraticBezierTo(37, 18, 57, 25)
+      ..lineTo(54, 39)
+      ..quadraticBezierTo(37, 45, 20, 39)
+      ..close();
+    canvas.drawPath(mask, Paint()..color = const Color(0xFF17191D));
+    canvas.drawLine(
+      const Offset(20, 28),
+      const Offset(54, 28),
+      Paint()
+        ..color = const Color(0xFFB4262B)
+        ..strokeWidth = 2,
     );
 
     final closed = blinkTimer <= 0 && blinkAmount < 1;
-    final eyePaint = Paint()
-      ..color = const Color(0xFF20222B)
-      ..strokeWidth = 2
+    final eye = Paint()
+      ..color = const Color(0xFF231811)
+      ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round;
 
     if (closed) {
-      canvas.drawLine(const Offset(27, 23), const Offset(31, 23), eyePaint);
-      canvas.drawLine(const Offset(39, 23), const Offset(43, 23), eyePaint);
+      canvas.drawLine(const Offset(28, 23), const Offset(33, 23), eye);
+      canvas.drawLine(const Offset(42, 23), const Offset(47, 23), eye);
     } else {
-      canvas.drawOval(const Rect.fromLTWH(27, 20, 4, 6), eyePaint);
-      canvas.drawOval(const Rect.fromLTWH(39, 20, 4, 6), eyePaint);
-      canvas.drawCircle(const Offset(29, 21.5), 0.8, Paint()..color = Colors.white);
-      canvas.drawCircle(const Offset(41, 21.5), 0.8, Paint()..color = Colors.white);
+      canvas.drawOval(const Rect.fromLTWH(28, 19, 5, 7), eye);
+      canvas.drawOval(const Rect.fromLTWH(42, 19, 5, 7), eye);
+      canvas.drawCircle(const Offset(29.6, 20.8), 0.9, Paint()..color = Colors.white);
+      canvas.drawCircle(const Offset(43.6, 20.8), 0.9, Paint()..color = Colors.white);
     }
 
-    final cheek = Paint()..color = const Color(0xFFFF9D9D);
-    canvas.drawOval(const Rect.fromLTWH(20, 27, 7, 4), cheek);
-    canvas.drawOval(const Rect.fromLTWH(43, 27, 7, 4), cheek);
-
-    canvas.drawArc(
-      const Rect.fromLTWH(31, 25, 8, 7),
-      0.15,
-      math.pi - 0.3,
-      false,
+    canvas.drawLine(
+      const Offset(18, 14),
+      const Offset(56, 14),
       Paint()
-        ..color = const Color(0xFF9B4D4D)
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
+        ..color = const Color(0xFF9D2025)
+        ..strokeWidth = 4,
+    );
+  }
+
+  void _drawHeadbandTails(Canvas canvas, double walk) {
+    final sway = isMoving ? walk * 3 : math.sin(idleTime * 2) * 1.2;
+    final red = Paint()
+      ..color = const Color(0xFFAA2227)
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      const Offset(56, 14),
+      Offset(68, 18 + sway),
+      red,
+    );
+    canvas.drawLine(
+      const Offset(56, 16),
+      Offset(66, 26 - sway * 0.5),
+      red,
     );
   }
 }
