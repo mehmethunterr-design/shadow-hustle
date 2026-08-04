@@ -49,7 +49,7 @@ class Player extends PositionComponent {
   }
 
   void applySpeedBoost([double seconds = 20]) {
-    speedBoostRemaining = math.max(speedBoostRemaining, seconds);
+    speedBoostRemaining = math.max(speedBoostRemaining, seconds).toDouble();
   }
 
   void installTurbo() {
@@ -106,7 +106,8 @@ class Player extends PositionComponent {
 
     idleTime += dt;
     if (speedBoostRemaining > 0) {
-      speedBoostRemaining = math.max(0, speedBoostRemaining - dt);
+      speedBoostRemaining =
+          math.max(0.0, speedBoostRemaining - dt).toDouble();
     }
 
     blinkTimer -= dt;
@@ -143,8 +144,12 @@ class Player extends PositionComponent {
 
     final marginX = vehicleMode ? 62.0 : 35.0;
     final marginY = vehicleMode ? 45.0 : 45.0;
-    position.x = position.x.clamp(marginX, worldBounds.x - marginX);
-    position.y = position.y.clamp(marginY, worldBounds.y - marginY);
+    position.x = position.x
+        .clamp(marginX, worldBounds.x - marginX)
+        .toDouble();
+    position.y = position.y
+        .clamp(marginY, worldBounds.y - marginY)
+        .toDouble();
   }
 
   @override
