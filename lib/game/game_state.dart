@@ -113,7 +113,9 @@ class GameProgress {
 
   double get xpProgress {
     final target = xpForNextLevel;
-    return target == 0 ? 0 : (xp / target).clamp(0.0, 1.0);
+    return target == 0
+        ? 0.0
+        : (xp / target).clamp(0.0, 1.0).toDouble();
   }
 
   String get questProgressText => switch (questStage) {
@@ -124,9 +126,9 @@ class GameProgress {
 
   double get questProgress => switch (questStage) {
         QuestStage.collectShadowChips =>
-          (collectedShadowChips / 3).clamp(0.0, 1.0),
-        QuestStage.completed => 1,
-        _ => 0,
+          (collectedShadowChips / 3).clamp(0.0, 1.0).toDouble(),
+        QuestStage.completed => 1.0,
+        _ => 0.0,
       };
 
   int itemCount(GameItem item) => inventory[item] ?? 0;
