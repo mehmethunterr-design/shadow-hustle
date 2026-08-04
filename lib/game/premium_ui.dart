@@ -35,7 +35,7 @@ class PremiumHud extends PositionComponent {
   }
 
   void _drawStatusPanel(Canvas canvas) {
-    final width = math.min(360.0, size.x - 24);
+    final width = math.min(360.0, size.x - 24).toDouble();
     final panel = RRect.fromRectAndRadius(
       Rect.fromLTWH(14, 14, width, 106),
       const Radius.circular(22),
@@ -510,8 +510,8 @@ class ShopPanel extends PositionComponent with TapCallbacks {
   @override
   void onGameResize(Vector2 gameSize) {
     super.onGameResize(gameSize);
-    final width = math.min(620.0, gameSize.x - 28);
-    final height = math.min(460.0, gameSize.y - 28);
+    final width = math.min(620.0, gameSize.x - 28).toDouble();
+    final height = math.min(460.0, gameSize.y - 28).toDouble();
     size = Vector2(width, height);
     position = Vector2(gameSize.x / 2, gameSize.y / 2);
   }
@@ -709,7 +709,7 @@ class NotificationBanner extends PositionComponent {
   @override
   void onGameResize(Vector2 gameSize) {
     super.onGameResize(gameSize);
-    size.x = math.min(440.0, gameSize.x - 30);
+    size.x = math.min(440.0, gameSize.x - 30).toDouble();
     position = Vector2(gameSize.x / 2, 18);
   }
 
