@@ -38,7 +38,7 @@ extension NpcArchetypeData on NpcArchetype {
         NpcArchetype.mageApprentice =>
           'Kırmızı kristaller gölge enerjisi taşıyor. Üç tanesini bulursan onları etkisiz hale getirebilirim.',
         NpcArchetype.techSpecialist =>
-          'Eski terminalleri onarabilirsen bölgedeki güvenlik kameralarını kısa süreliğine kapatabiliriz.',
+          'Eski terminalleri onarırsan bölgedeki güvenlik kameralarını kısa süreliğine kapatabiliriz.',
       };
 
   Color get primary => switch (this) {
@@ -111,7 +111,12 @@ class CharacterNpc extends PositionComponent {
     final bob = math.sin(_time * 2.2 + archetype.index) * 0.9;
     final breathe = 1 + math.sin(_time * 2.0 + archetype.index) * 0.012;
 
-    _drawShadow(canvas);
+    canvas.drawOval(
+      const Rect.fromLTWH(14, 79, 48, 13),
+      Paint()
+        ..color = const Color(0x33000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
 
     canvas.save();
     canvas.translate(0, bob);
@@ -123,15 +128,6 @@ class CharacterNpc extends PositionComponent {
     _drawFrontAccessory(canvas);
     if (showQuestMarker) _drawQuestMarker(canvas);
     canvas.restore();
-  }
-
-  void _drawShadow(Canvas canvas) {
-    canvas.drawOval(
-      const Rect.fromLTWH(14, 79, 48, 13),
-      Paint()
-        ..color = const Color(0x33000000)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
   }
 
   void _drawLegs(Canvas canvas) {
@@ -172,29 +168,97 @@ class CharacterNpc extends PositionComponent {
     canvas.clipRRect(body);
     canvas.drawOval(
       const Rect.fromLTWH(13, 29, 27, 44),
-      Paint()..color = Colors.white.withValues(alpha: 0.13),
+      Paint()..color = const Color(0x21FFFFFF),
     );
     canvas.drawOval(
       const Rect.fromLTWH(45, 31, 24, 44),
-      Paint()..color = Colors.black.withValues(alpha: 0.18),
+      Paint()..color = const Color(0x2E000000),
     );
     canvas.restore();
 
     switch (archetype) {
       case NpcArchetype.explorer:
-        _drawJacketDetails(canvas);
+        canvas.drawRect(
+          const Rect.fromLTWH(35, 33, 5, 36),
+          Paint()..color = archetype.accent,
+        );
+        canvas.drawCircle(
+          const Offset(28, 47),
+          3,
+          Paint()..color = const Color(0xFFE0B56E),
+        );
+        break;
       case NpcArchetype.streetRunner:
-        _drawHoodieDetails(canvas);
+        final hoodPaint = Paint()
+          ..color = archetype.accent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4;
+        canvas.drawArc(
+          const Rect.fromLTWH(21, 28, 34, 22),
+          math.pi,
+          math.pi,
+          false,
+          hoodPaint,
+        );
+        break;
       case NpcArchetype.farmer:
-        _drawOveralls(canvas);
+        final blue = Paint()..color = const Color(0xFF3D7CA6);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(24, 35, 28, 34),
+            const Radius.circular(7),
+          ),
+          blue,
+        );
+        break;
       case NpcArchetype.forestHunter:
-        _drawHunterDetails(canvas);
+        final strap = Paint()
+          ..color = archetype.accent
+          ..strokeWidth = 6;
+        canvas.drawLine(const Offset(21, 34), const Offset(52, 68), strap);
+        break;
       case NpcArchetype.youngKnight:
-        _drawArmor(canvas);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(19, 33, 38, 30),
+            const Radius.circular(8),
+          ),
+          Paint()..color = const Color(0xFFAFC0CF),
+        );
+        break;
       case NpcArchetype.mageApprentice:
-        _drawRobe(canvas);
+        final robeTrim = Paint()
+          ..color = archetype.accent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(17, 33, 42, 36),
+            const Radius.circular(14),
+          ),
+          robeTrim,
+        );
+        canvas.drawCircle(
+          const Offset(38, 48),
+          4,
+          Paint()..color = archetype.accent,
+        );
+        break;
       case NpcArchetype.techSpecialist:
-        _drawTechSuit(canvas);
+        canvas.drawRect(
+          const Rect.fromLTWH(19, 38, 4, 24),
+          Paint()..color = archetype.accent,
+        );
+        canvas.drawRect(
+          const Rect.fromLTWH(53, 38, 4, 24),
+          Paint()..color = archetype.accent,
+        );
+        canvas.drawCircle(
+          const Offset(38, 48),
+          5,
+          Paint()..color = archetype.accent,
+        );
+        break;
     }
 
     canvas.restore();
@@ -223,8 +287,11 @@ class CharacterNpc extends PositionComponent {
   }
 
   void _drawHead(Canvas canvas) {
-    final skin = Paint()..color = const Color(0xFFFFC9A5);
-    canvas.drawCircle(const Offset(38, 22), 21, skin);
+    canvas.drawCircle(
+      const Offset(38, 22),
+      21,
+      Paint()..color = const Color(0xFFFFC9A5),
+    );
     canvas.drawCircle(
       const Offset(31, 16),
       12,
@@ -245,19 +312,28 @@ class CharacterNpc extends PositionComponent {
     } else {
       canvas.drawOval(const Rect.fromLTWH(30, 20, 4, 6), eye);
       canvas.drawOval(const Rect.fromLTWH(42, 20, 4, 6), eye);
-      canvas.drawCircle(const Offset(31.4, 21.3), 0.7, Paint()..color = Colors.white);
-      canvas.drawCircle(const Offset(43.4, 21.3), 0.7, Paint()..color = Colors.white);
+      canvas.drawCircle(
+        const Offset(31.4, 21.3),
+        0.7,
+        Paint()..color = Colors.white,
+      );
+      canvas.drawCircle(
+        const Offset(43.4, 21.3),
+        0.7,
+        Paint()..color = Colors.white,
+      );
     }
 
+    final smile = Paint()
+      ..color = const Color(0xFF8B4B45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3;
     canvas.drawArc(
       const Rect.fromLTWH(34, 26, 8, 6),
       0.2,
       math.pi - 0.4,
       false,
-      Paint()
-        ..color = const Color(0xFF8B4B45)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3,
+      smile,
     );
   }
 
@@ -270,7 +346,6 @@ class CharacterNpc extends PositionComponent {
       true,
       hair,
     );
-
     canvas.drawOval(const Rect.fromLTWH(18, 4, 17, 15), hair);
     canvas.drawOval(const Rect.fromLTWH(29, 0, 18, 15), hair);
     canvas.drawOval(const Rect.fromLTWH(42, 4, 16, 16), hair);
@@ -285,17 +360,34 @@ class CharacterNpc extends PositionComponent {
         ),
         straw,
       );
-      canvas.drawRect(const Rect.fromLTWH(22, -1, 33, 3), Paint()..color = const Color(0xFFB64C36));
+      canvas.drawRect(
+        const Rect.fromLTWH(22, -1, 33, 3),
+        Paint()..color = const Color(0xFFB64C36),
+      );
     }
 
     if (archetype == NpcArchetype.techSpecialist) {
-      final cyan = Paint()
+      final headphones = Paint()
         ..color = archetype.accent
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3;
-      canvas.drawArc(const Rect.fromLTWH(17, 4, 42, 33), math.pi, math.pi, false, cyan);
-      canvas.drawCircle(const Offset(18, 22), 5, Paint()..color = archetype.accent);
-      canvas.drawCircle(const Offset(58, 22), 5, Paint()..color = archetype.accent);
+      canvas.drawArc(
+        const Rect.fromLTWH(17, 4, 42, 33),
+        math.pi,
+        math.pi,
+        false,
+        headphones,
+      );
+      canvas.drawCircle(
+        const Offset(18, 22),
+        5,
+        Paint()..color = archetype.accent,
+      );
+      canvas.drawCircle(
+        const Offset(58, 22),
+        5,
+        Paint()..color = archetype.accent,
+      );
     }
   }
 
@@ -309,6 +401,7 @@ class CharacterNpc extends PositionComponent {
           ),
           Paint()..color = const Color(0xFF745034),
         );
+        break;
       case NpcArchetype.forestHunter:
         canvas.save();
         canvas.translate(58, 33);
@@ -321,13 +414,21 @@ class CharacterNpc extends PositionComponent {
           Paint()..color = const Color(0xFF6E4225),
         );
         canvas.restore();
+        break;
       case NpcArchetype.youngKnight:
         canvas.save();
         canvas.translate(58, 27);
         canvas.rotate(-0.45);
-        canvas.drawRect(const Rect.fromLTWH(-2, 0, 4, 48), Paint()..color = const Color(0xFFC8D2DC));
-        canvas.drawRect(const Rect.fromLTWH(-7, 8, 14, 4), Paint()..color = const Color(0xFF8D6B2E));
+        canvas.drawRect(
+          const Rect.fromLTWH(-2, 0, 4, 48),
+          Paint()..color = const Color(0xFFC8D2DC),
+        );
+        canvas.drawRect(
+          const Rect.fromLTWH(-7, 8, 14, 4),
+          Paint()..color = const Color(0xFF8D6B2E),
+        );
         canvas.restore();
+        break;
       case NpcArchetype.mageApprentice:
         canvas.save();
         canvas.translate(61, 18);
@@ -339,8 +440,13 @@ class CharacterNpc extends PositionComponent {
           ),
           Paint()..color = const Color(0xFF6D4829),
         );
-        canvas.drawCircle(const Offset(0, 0), 7, Paint()..color = archetype.accent);
+        canvas.drawCircle(
+          const Offset(0, 0),
+          7,
+          Paint()..color = archetype.accent,
+        );
         canvas.restore();
+        break;
       default:
         break;
     }
@@ -356,9 +462,19 @@ class CharacterNpc extends PositionComponent {
           ..lineTo(26, 38)
           ..close();
         canvas.drawPath(scarf, Paint()..color = archetype.accent);
+        break;
       case NpcArchetype.youngKnight:
-        canvas.drawCircle(const Offset(16, 53), 12, Paint()..color = const Color(0xFF546B85));
-        canvas.drawCircle(const Offset(16, 53), 8, Paint()..color = archetype.accent);
+        canvas.drawCircle(
+          const Offset(16, 53),
+          12,
+          Paint()..color = const Color(0xFF546B85),
+        );
+        canvas.drawCircle(
+          const Offset(16, 53),
+          8,
+          Paint()..color = archetype.accent,
+        );
+        break;
       case NpcArchetype.techSpecialist:
         canvas.drawRRect(
           RRect.fromRectAndRadius(
@@ -367,88 +483,18 @@ class CharacterNpc extends PositionComponent {
           ),
           Paint()..color = archetype.accent,
         );
+        break;
       default:
         break;
     }
   }
 
-  void _drawJacketDetails(Canvas canvas) {
-    canvas.drawRect(const Rect.fromLTWH(35, 33, 5, 36), Paint()..color = archetype.accent);
-    canvas.drawCircle(const Offset(28, 47), 3, Paint()..color = const Color(0xFFE0B56E));
-  }
-
-  void _drawHoodieDetails(Canvas canvas) {
-    canvas.drawArc(
-      const Rect.fromLTWH(21, 28, 34, 22),
-      math.pi,
-      math.pi,
-      false,
-      Paint()
-        ..color = archetype.accent
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4,
-    );
-    canvas.drawLine(const Offset(31, 42), const Offset(31, 55), Paint()..color = archetype.accent..strokeWidth = 2);
-    canvas.drawLine(const Offset(45, 42), const Offset(45, 55), Paint()..color = archetype.accent..strokeWidth = 2);
-  }
-
-  void _drawOveralls(Canvas canvas) {
-    final blue = Paint()..color = const Color(0xFF3D7CA6);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(24, 35, 28, 34),
-        const Radius.circular(7),
-      ),
-      blue,
-    );
-    canvas.drawLine(const Offset(25, 35), const Offset(18, 31), blue..strokeWidth = 4);
-    canvas.drawLine(const Offset(51, 35), const Offset(58, 31), blue..strokeWidth = 4);
-  }
-
-  void _drawHunterDetails(Canvas canvas) {
-    final strap = Paint()
-      ..color = archetype.accent
-      ..strokeWidth = 6;
-    canvas.drawLine(const Offset(21, 34), const Offset(52, 68), strap);
-    canvas.drawCircle(const Offset(26, 49), 4, Paint()..color = const Color(0xFF7AA33D));
-  }
-
-  void _drawArmor(Canvas canvas) {
-    final metal = Paint()..color = const Color(0xFFAFC0CF);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(19, 33, 38, 30),
-        const Radius.circular(8),
-      ),
-      metal,
-    );
-    canvas.drawLine(const Offset(38, 34), const Offset(38, 62), Paint()..color = const Color(0xFF6F879D)..strokeWidth = 3);
-  }
-
-  void _drawRobe(Canvas canvas) {
-    final trim = Paint()
-      ..color = archetype.accent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(17, 33, 42, 36),
-        const Radius.circular(14),
-      ),
-      trim,
-    );
-    canvas.drawCircle(const Offset(38, 48), 4, Paint()..color = archetype.accent);
-  }
-
-  void _drawTechSuit(Canvas canvas) {
-    final cyan = Paint()..color = archetype.accent;
-    canvas.drawRect(const Rect.fromLTWH(19, 38, 4, 24), cyan);
-    canvas.drawRect(const Rect.fromLTWH(53, 38, 4, 24), cyan);
-    canvas.drawCircle(const Offset(38, 48), 5, cyan);
-  }
-
   void _drawQuestMarker(Canvas canvas) {
-    canvas.drawCircle(const Offset(38, -18), 13, Paint()..color = const Color(0xFFFFD84A));
+    canvas.drawCircle(
+      const Offset(38, -18),
+      13,
+      Paint()..color = const Color(0xFFFFD84A),
+    );
     final marker = TextPainter(
       text: const TextSpan(
         text: '!',
