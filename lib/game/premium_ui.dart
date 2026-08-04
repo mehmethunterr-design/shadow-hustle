@@ -7,6 +7,29 @@ import 'package:flutter/material.dart';
 import 'game_state.dart';
 import 'world_components.dart';
 
+TextPainter _makeText(
+  String value,
+  double fontSize,
+  Color color,
+  FontWeight weight, {
+  int? maxLines,
+  String? ellipsis,
+}) {
+  return TextPainter(
+    text: TextSpan(
+      text: value,
+      style: TextStyle(
+        color: color,
+        fontSize: fontSize,
+        fontWeight: weight,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: maxLines,
+    ellipsis: ellipsis,
+  );
+}
+
 class PremiumHud extends PositionComponent {
   PremiumHud({
     required this.progress,
@@ -21,9 +44,9 @@ class PremiumHud extends PositionComponent {
   final double Function() boostSeconds;
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    size = gameSize;
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    this.size = size.clone();
     position = Vector2.zero();
   }
 
@@ -58,40 +81,40 @@ class PremiumHud extends PositionComponent {
       Paint()..color = const Color(0xFF15171C),
     );
 
-    final levelText = _text(
+    final level = _makeText(
       'LV ${progress.level}',
       13,
       Colors.white,
       FontWeight.w900,
-    );
-    levelText.paint(canvas, Offset(55 - levelText.width / 2, 49));
+    )..layout();
+    level.paint(canvas, Offset(55 - level.width / 2, 49));
 
-    _text(
+    final money = _makeText(
       '${progress.coins} ₺',
       20,
       const Color(0xFFFFD768),
       FontWeight.w900,
-    ).paint(canvas, const Offset(96, 28));
+    )..layout();
+    money.paint(canvas, const Offset(96, 28));
 
-    _text(
+    final mode = _makeText(
       isDriving() ? 'ARAÇ MODU' : 'GİZEMLİ NİNJA',
       12,
       isDriving() ? const Color(0xFF5ED6FF) : Colors.white70,
       FontWeight.w700,
-    ).paint(canvas, const Offset(96, 55));
+    )..layout();
+    mode.paint(canvas, const Offset(96, 55));
 
     final boost = boostSeconds();
-    final status = boost > 0
-        ? 'Hız takviyesi: ${boost.ceil()} sn'
-        : 'Saat ${timeLabel()}';
-    _text(
-      status,
+    final status = _makeText(
+      boost > 0 ? 'Hız takviyesi: ${boost.ceil()} sn' : 'Saat ${timeLabel()}',
       12,
       boost > 0 ? const Color(0xFF46E6B2) : Colors.white54,
       FontWeight.w600,
-    ).paint(canvas, const Offset(96, 78));
+    )..layout();
+    status.paint(canvas, const Offset(96, 78));
 
-    final barWidth = width - 110;
+    final barWidth = math.max(40.0, width - 110).toDouble();
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(96, 99, barWidth, 7),
@@ -124,34 +147,32 @@ class PremiumHud extends PositionComponent {
     );
     canvas.drawRRect(panel, Paint()..color = const Color(0xE91A1E28));
 
-    _text(
+    final heading = _makeText(
       'AKTİF GÖREV',
       11,
       const Color(0xFFE23A42),
       FontWeight.w900,
-    ).paint(canvas, Offset(left + 20, 27));
+    )..layout();
+    heading.paint(canvas, Offset(left + 20, 27));
 
-    _text(
+    final title = _makeText(
       progress.questStage.title,
       18,
       Colors.white,
       FontWeight.w900,
-    ).paint(canvas, Offset(left + 20, 48));
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: width - 40);
+    title.paint(canvas, Offset(left + 20, 48));
 
-    final description = TextPainter(
-      text: TextSpan(
-        text: progress.questStage.description,
-        style: const TextStyle(
-          color: Colors.white70,
-          fontSize: 12,
-          height: 1.25,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
+    final description = _makeText(
+      progress.questStage.description,
+      12,
+      Colors.white70,
+      FontWeight.w500,
       maxLines: 2,
       ellipsis: '…',
     )..layout(maxWidth: width - 40);
-
     description.paint(canvas, Offset(left + 20, 75));
 
     canvas.drawRRect(
@@ -174,31 +195,13 @@ class PremiumHud extends PositionComponent {
       Paint()..color = const Color(0xFFE23A42),
     );
 
-    _text(
+    final progressText = _makeText(
       progress.questProgressText,
       11,
       Colors.white70,
       FontWeight.w800,
-    ).paint(canvas, Offset(left + width - 62, 106));
-  }
-
-  TextPainter _text(
-    String value,
-    double size,
-    Color color,
-    FontWeight weight,
-  ) {
-    return TextPainter(
-      text: TextSpan(
-        text: value,
-        style: TextStyle(
-          color: color,
-          fontSize: size,
-          fontWeight: weight,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
     )..layout();
+    progressText.paint(canvas, Offset(left + width - 62, 106));
   }
 }
 
@@ -220,9 +223,9 @@ class MiniMapComponent extends PositionComponent {
   final List<Vector2> Function() shopPositions;
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    position = Vector2(18, gameSize.y - 150);
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    position = Vector2(18, size.y - 150);
   }
 
   Offset _map(Vector2 point) {
@@ -234,6 +237,8 @@ class MiniMapComponent extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    super.render(canvas);
+
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(0, 0, size.x, size.y),
@@ -250,10 +255,10 @@ class MiniMapComponent extends PositionComponent {
     );
 
     for (final shop in shopPositions()) {
-      final p = _map(shop);
+      final point = _map(shop);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromCenter(center: p, width: 8, height: 8),
+          Rect.fromCenter(center: point, width: 8, height: 8),
           const Radius.circular(2),
         ),
         Paint()..color = const Color(0xFFFFC857),
@@ -296,9 +301,9 @@ class ActionButton extends PositionComponent with TapCallbacks {
   String icon = '●';
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    position = Vector2(gameSize.x - 28, gameSize.y - 28);
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    position = Vector2(size.x - 28, size.y - 28);
   }
 
   @override
@@ -308,6 +313,8 @@ class ActionButton extends PositionComponent with TapCallbacks {
 
   @override
   void render(Canvas canvas) {
+    super.render(canvas);
+
     final outer = enabled
         ? const Color(0xFF8E1E23)
         : const Color(0x775D6170);
@@ -323,46 +330,23 @@ class ActionButton extends PositionComponent with TapCallbacks {
     canvas.drawCircle(const Offset(54, 51), 49, Paint()..color = outer);
     canvas.drawCircle(const Offset(54, 51), 38, Paint()..color = inner);
 
-    final iconPainter = _text(
+    final iconPainter = _makeText(
       icon,
       24,
       enabled ? Colors.white : Colors.white38,
       FontWeight.w900,
-    );
-    iconPainter.paint(
-      canvas,
-      Offset(54 - iconPainter.width / 2, 30),
-    );
+    )..layout();
+    iconPainter.paint(canvas, Offset(54 - iconPainter.width / 2, 30));
 
-    final labelPainter = _text(
+    final labelPainter = _makeText(
       label,
       10,
       enabled ? Colors.white : Colors.white38,
       FontWeight.w900,
-    );
-    labelPainter.paint(
-      canvas,
-      Offset(54 - labelPainter.width / 2, 70),
-    );
-  }
-
-  TextPainter _text(
-    String text,
-    double size,
-    Color color,
-    FontWeight weight,
-  ) {
-    return TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: size,
-          fontWeight: weight,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: 84);
+    labelPainter.paint(canvas, Offset(54 - labelPainter.width / 2, 70));
   }
 }
 
@@ -377,11 +361,11 @@ class DialogueBox extends PositionComponent with TapCallbacks {
   Color accent = const Color(0xFFE23A42);
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    final width = gameSize.x > 760 ? 680.0 : gameSize.x - 26;
-    size = Vector2(width, 190);
-    position = Vector2(gameSize.x / 2, gameSize.y - 18);
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    final width = size.x > 760 ? 680.0 : size.x - 26;
+    this.size = Vector2(width, 190);
+    position = Vector2(size.x / 2, size.y - 18);
   }
 
   void show({
@@ -407,6 +391,7 @@ class DialogueBox extends PositionComponent with TapCallbacks {
   @override
   void render(Canvas canvas) {
     if (!visible) return;
+    super.render(canvas);
 
     final rect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.x, size.y - 8),
@@ -443,53 +428,33 @@ class DialogueBox extends PositionComponent with TapCallbacks {
       Paint()..color = const Color(0xFF242933),
     );
 
-    _text(
+    final speakerPainter = _makeText(
       speaker,
       20,
       accent,
       FontWeight.w900,
-    ).paint(canvas, const Offset(120, 27));
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: math.max(80.0, size.x - 155).toDouble());
+    speakerPainter.paint(canvas, const Offset(120, 27));
 
-    final messagePainter = TextPainter(
-      text: TextSpan(
-        text: message,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          height: 1.35,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
+    final messagePainter = _makeText(
+      message,
+      16,
+      Colors.white,
+      FontWeight.w500,
       maxLines: 4,
-    )..layout(maxWidth: size.x - 155);
-
+      ellipsis: '…',
+    )..layout(maxWidth: math.max(80.0, size.x - 155).toDouble());
     messagePainter.paint(canvas, const Offset(120, 62));
 
-    _text(
+    final hint = _makeText(
       'Devam etmek için dokun',
       11,
       Colors.white38,
       FontWeight.w600,
-    ).paint(canvas, Offset(size.x - 185, size.y - 35));
-  }
-
-  TextPainter _text(
-    String text,
-    double size,
-    Color color,
-    FontWeight weight,
-  ) {
-    return TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: size,
-          fontWeight: weight,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
     )..layout();
+    hint.paint(canvas, Offset(size.x - hint.width - 24, size.y - 35));
   }
 }
 
@@ -508,12 +473,12 @@ class ShopPanel extends PositionComponent with TapCallbacks {
   ShopKind? shop;
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    final width = math.min(620.0, gameSize.x - 28).toDouble();
-    final height = math.min(460.0, gameSize.y - 28).toDouble();
-    size = Vector2(width, height);
-    position = Vector2(gameSize.x / 2, gameSize.y / 2);
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    final width = math.min(620.0, size.x - 28).toDouble();
+    final height = math.min(460.0, size.y - 28).toDouble();
+    this.size = Vector2(width, height);
+    position = Vector2(size.x / 2, size.y / 2);
   }
 
   void show(ShopKind kind) {
@@ -536,11 +501,11 @@ class ShopPanel extends PositionComponent with TapCallbacks {
     }
 
     final products = shop!.products;
-    for (var i = 0; i < products.length; i++) {
-      final top = 130.0 + i * 105;
+    for (var index = 0; index < products.length; index++) {
+      final top = 130.0 + index * 105;
       final rect = Rect.fromLTWH(30, top, size.x - 60, 82);
       if (rect.contains(Offset(local.x, local.y))) {
-        onPurchase(products[i]);
+        onPurchase(products[index]);
         return;
       }
     }
@@ -549,6 +514,7 @@ class ShopPanel extends PositionComponent with TapCallbacks {
   @override
   void render(Canvas canvas) {
     if (!visible || shop == null) return;
+    super.render(canvas);
 
     final kind = shop!;
     final panel = RRect.fromRectAndRadius(
@@ -568,37 +534,44 @@ class ShopPanel extends PositionComponent with TapCallbacks {
         ..strokeWidth = 3,
     );
 
-    _text(
+    final title = _makeText(
       kind.title,
       27,
       Colors.white,
       FontWeight.w900,
-    ).paint(canvas, const Offset(30, 25));
-    _text(
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: math.max(120.0, size.x - 250).toDouble());
+    title.paint(canvas, const Offset(30, 25));
+
+    final subtitle = _makeText(
       kind.subtitle,
       13,
       kind.accent,
       FontWeight.w700,
-    ).paint(canvas, const Offset(31, 62));
-    _text(
+    )..layout();
+    subtitle.paint(canvas, const Offset(31, 62));
+
+    final balance = _makeText(
       '${progress.coins} ₺',
       18,
       const Color(0xFFFFD768),
       FontWeight.w900,
-    ).paint(canvas, Offset(size.x - 150, 31));
+    )..layout();
+    balance.paint(canvas, Offset(size.x - 150, 31));
 
     canvas.drawCircle(
       Offset(size.x - 34, 34),
       20,
       Paint()..color = const Color(0xFF2D333F),
     );
-    final close = _text('×', 23, Colors.white, FontWeight.w900);
+    final close = _makeText('×', 23, Colors.white, FontWeight.w900)..layout();
     close.paint(canvas, Offset(size.x - 34 - close.width / 2, 20));
 
     final products = kind.products;
-    for (var i = 0; i < products.length; i++) {
-      final product = products[i];
-      final top = 130.0 + i * 105;
+    for (var index = 0; index < products.length; index++) {
+      final product = products[index];
+      final top = 130.0 + index * 105;
       final card = RRect.fromRectAndRadius(
         Rect.fromLTWH(30, top, size.x - 60, 82),
         const Radius.circular(18),
@@ -615,72 +588,54 @@ class ShopPanel extends PositionComponent with TapCallbacks {
         Paint()..color = product.item.color,
       );
 
-      _text(
+      final productName = _makeText(
         product.item.label,
         17,
         Colors.white,
         FontWeight.w900,
-      ).paint(canvas, Offset(110, top + 17));
-      _text(
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: math.max(90.0, size.x - 300).toDouble());
+      productName.paint(canvas, Offset(110, top + 17));
+
+      final description = _makeText(
         product.description,
         12,
         Colors.white54,
         FontWeight.w500,
-      ).paint(canvas, Offset(110, top + 46));
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: math.max(90.0, size.x - 300).toDouble());
+      description.paint(canvas, Offset(110, top + 46));
 
       const priceWidth = 92.0;
+      final priceLeft = size.x - priceWidth - 48;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            size.x - priceWidth - 48,
-            top + 20,
-            priceWidth,
-            42,
-          ),
+          Rect.fromLTWH(priceLeft, top + 20, priceWidth, 42),
           const Radius.circular(12),
         ),
         Paint()..color = kind.accent,
       );
-      final price = _text(
+      final price = _makeText(
         '${product.price} ₺',
         14,
         Colors.white,
         FontWeight.w900,
-      );
+      )..layout();
       price.paint(
         canvas,
-        Offset(
-          size.x - priceWidth - 48 + (priceWidth - price.width) / 2,
-          top + 31,
-        ),
+        Offset(priceLeft + (priceWidth - price.width) / 2, top + 31),
       );
     }
 
-    _text(
+    final hint = _makeText(
       'Bir ürüne dokunarak satın al.',
       11,
       Colors.white38,
       FontWeight.w600,
-    ).paint(canvas, Offset(30, size.y - 35));
-  }
-
-  TextPainter _text(
-    String text,
-    double size,
-    Color color,
-    FontWeight weight,
-  ) {
-    return TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: size,
-          fontWeight: weight,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
     )..layout();
+    hint.paint(canvas, Offset(30, size.y - 35));
   }
 }
 
@@ -707,10 +662,10 @@ class NotificationBanner extends PositionComponent {
   }
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    size.x = math.min(440.0, gameSize.x - 30).toDouble();
-    position = Vector2(gameSize.x / 2, 18);
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    this.size.x = math.min(440.0, size.x - 30).toDouble();
+    position = Vector2(size.x / 2, 18);
   }
 
   @override
@@ -722,10 +677,12 @@ class NotificationBanner extends PositionComponent {
   @override
   void render(Canvas canvas) {
     if (_remaining <= 0) return;
+    super.render(canvas);
 
     final appear = _remaining < 0.25 ? _remaining / 0.25 : 1.0;
     canvas.save();
     canvas.translate(0, -18 * (1 - appear));
+
     final panel = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.x, size.y),
       const Radius.circular(18),
@@ -739,33 +696,16 @@ class NotificationBanner extends PositionComponent {
       Paint()..color = accent,
     );
 
-    final painter = _text(
+    final painter = _makeText(
       message,
       14,
       Colors.white,
       FontWeight.w800,
-    );
+      maxLines: 2,
+      ellipsis: '…',
+    )..layout(maxWidth: math.max(40.0, size.x - 48).toDouble());
     painter.paint(canvas, Offset(24, (size.y - painter.height) / 2));
     canvas.restore();
-  }
-
-  TextPainter _text(
-    String text,
-    double size,
-    Color color,
-    FontWeight weight,
-  ) {
-    return TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: size,
-          fontWeight: weight,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: size.x - 45);
   }
 }
 
@@ -775,14 +715,16 @@ class DayNightOverlay extends PositionComponent {
   final double Function() dayProgress;
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    size = gameSize;
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    this.size = size.clone();
     position = Vector2.zero();
   }
 
   @override
   void render(Canvas canvas) {
+    super.render(canvas);
+
     final phase = dayProgress();
     final nightStrength = phase < 0.23
         ? 1 - phase / 0.23
