@@ -1,4 +1,5 @@
 import 'package:flame/components.dart';
+import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -636,7 +637,9 @@ class ShadowGame extends FlameGame with KeyboardEvents {
   void _exitCar() {
     player.setVehicleMode(false);
     playerCar.position = Vector2(
-      (player.position.x + 100).clamp(70, worldSize.x - 70),
+      (player.position.x + 100)
+          .clamp(70.0, worldSize.x - 70)
+          .toDouble(),
       player.position.y,
     );
     playerCar.occupied = false;
