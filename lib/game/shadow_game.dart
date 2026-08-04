@@ -6,22 +6,53 @@ import 'package:flutter/services.dart';
 
 import '../npc/character_npc.dart';
 import '../player/player.dart';
+import 'game_state.dart';
+import 'premium_ui.dart';
+import 'world_components.dart';
+
+enum _InteractionType {
+  none,
+  npc,
+  shop,
+  car,
+  exitCar,
+}
 
 class ShadowGame extends FlameGame with KeyboardEvents {
-  late final Player player;
-  late final JoystickComponent joystick;
-  late final InteractionButton interactionButton;
-  late final DialogueBox dialogueBox;
-
-  final Vector2 worldSize = Vector2(1800, 1200);
+  final Vector2 worldSize = Vector2(3200, 2200);
   final List<Rect> obstacles = [];
   final List<CharacterNpc> npcs = [];
+  final List<ShopBuilding> shops = [];
+  final List<ShadowChip> shadowChips = [];
+  final List<Vector2> _treePositions = [];
 
-  CharacterNpc? activeNpc;
-  bool dialogueOpen = false;
+  final GameProgress progress = GameProgress();
+
+  late final Player player;
+  late final JoystickComponent joystick;
+  late final ParkedCar playerCar;
+  late final DeliveryZone deliveryZone;
+
+  late final PremiumHud hud;
+  late final MiniMapComponent miniMap;
+  late final ActionButton actionButton;
+  late final DialogueBox dialogueBox;
+  late final ShopPanel shopPanel;
+  late final NotificationBanner notification;
+  late final DayNightOverlay dayNightOverlay;
+
+  _InteractionType _interactionType = _InteractionType.none;
+  CharacterNpc? _activeNpc;
+  ShopBuilding? _activeShop;
+  ParkedCar? _activeCar;
+
+  double worldClock = 0.34;
+  bool _deliveryRewarded = false;
+
+  bool get modalOpen => dialogueBox.visible || shopPanel.visible;
 
   @override
-  Color backgroundColor() => const Color(0xFF79D96B);
+  Color backgroundColor() => const Color(0xFF17372B);
 
   @override
   Future<void> onLoad() async {
@@ -31,15 +62,19 @@ class ShadowGame extends FlameGame with KeyboardEvents {
       RectangleComponent(
         position: Vector2.zero(),
         size: worldSize,
-        paint: Paint()..color = const Color(0xFF79D96B),
+        paint: Paint()..color = const Color(0xFF5FC76B),
         priority: -10,
       ),
     );
 
-    _buildWorld();
+    await _buildExpandedWorld();
     await _addNpcRoster();
+    await _addMissionObjects();
 
-    player = Player(position: Vector2(500, 400));
+    player = Player(
+      position: Vector2(360, 360),
+      worldBounds: worldSize,
+    );
     player.obstacles = obstacles;
     await world.add(player);
 
@@ -53,50 +88,264 @@ class ShadowGame extends FlameGame with KeyboardEvents {
         paint: Paint()..color = const Color(0x77341E25),
       ),
       margin: const EdgeInsets.only(left: 35, bottom: 35),
-      priority: 100,
+      priority: 180,
     );
 
-    interactionButton = InteractionButton(onPressed: interactWithNpc);
+    actionButton = ActionButton(onPressed: _performInteraction);
     dialogueBox = DialogueBox(onClose: closeDialogue);
+    shopPanel = ShopPanel(
+      progress: progress,
+      onPurchase: _purchaseProduct,
+      onClose: closeShop,
+    );
+    notification = NotificationBanner();
 
+    hud = PremiumHud(
+      progress: progress,
+      timeLabel: _timeLabel,
+      isDriving: () => player.vehicleMode,
+      boostSeconds: () => player.speedBoostRemaining,
+    );
+
+    miniMap = MiniMapComponent(
+      worldSize: worldSize,
+      playerPosition: () => Vector2(player.position.x, player.position.y),
+      npcPositions: () => npcs
+          .map((npc) => Vector2(npc.position.x, npc.position.y))
+          .toList(),
+      shopPositions: () => shops
+          .map((shop) => Vector2(shop.position.x, shop.position.y))
+          .toList(),
+    );
+
+    dayNightOverlay = DayNightOverlay(dayProgress: () => worldClock);
+
+    await camera.viewport.add(dayNightOverlay);
+    await camera.viewport.add(hud);
+    await camera.viewport.add(miniMap);
     await camera.viewport.add(joystick);
-    await camera.viewport.add(interactionButton);
+    await camera.viewport.add(actionButton);
     await camera.viewport.add(dialogueBox);
+    await camera.viewport.add(shopPanel);
+    await camera.viewport.add(notification);
 
     player.joystick = joystick;
+
     camera.follow(player);
-    camera.viewfinder.zoom = 1.35;
+    camera.viewfinder.zoom = 1.12;
+
+    notification.show(
+      'Shadow City’ye hoş geldin. Kaşif Arda’yı bul ve ilk görevi başlat.',
+      accent: const Color(0xFFE23A42),
+      seconds: 5,
+    );
+  }
+
+  Future<void> _buildExpandedWorld() async {
+    await world.addAll([
+      DistrictGround(
+        position: Vector2(60, 60),
+        size: Vector2(1280, 760),
+        color: const Color(0xFF62C96E),
+        label: 'Eski Mahalle',
+      ),
+      DistrictGround(
+        position: Vector2(1730, 80),
+        size: Vector2(1390, 720),
+        color: const Color(0xFF4CBF76),
+        label: 'Neon Bölge',
+      ),
+      DistrictGround(
+        position: Vector2(80, 1280),
+        size: Vector2(1320, 820),
+        color: const Color(0xFF72C46B),
+        label: 'Park ve Çarşı',
+      ),
+      DistrictGround(
+        position: Vector2(1730, 1320),
+        size: Vector2(1390, 780),
+        color: const Color(0xFF4BAE70),
+        label: 'Liman',
+      ),
+      RoadComponent(
+        position: Vector2(0, 900),
+        size: Vector2(3200, 240),
+        horizontal: true,
+      ),
+      RoadComponent(
+        position: Vector2(1450, 0),
+        size: Vector2(240, 2200),
+        horizontal: false,
+      ),
+      RoadComponent(
+        position: Vector2(0, 1760),
+        size: Vector2(3200, 190),
+        horizontal: true,
+      ),
+      RoadComponent(
+        position: Vector2(2460, 880),
+        size: Vector2(190, 1320),
+        horizontal: false,
+      ),
+    ]);
+
+    shops.addAll([
+      ShopBuilding(
+        position: Vector2(570, 700),
+        kind: ShopKind.garage,
+      ),
+      ShopBuilding(
+        position: Vector2(1120, 700),
+        kind: ShopKind.cafe,
+      ),
+      ShopBuilding(
+        position: Vector2(2050, 680),
+        kind: ShopKind.ninjaMarket,
+      ),
+      ShopBuilding(
+        position: Vector2(2700, 680),
+        kind: ShopKind.techStore,
+      ),
+      ShopBuilding(
+        position: Vector2(1030, 1510),
+        kind: ShopKind.arcade,
+      ),
+      ShopBuilding(
+        position: Vector2(2070, 1510),
+        kind: ShopKind.techStore,
+      ),
+    ]);
+
+    for (final shop in shops) {
+      await world.add(shop);
+      obstacles.add(shop.collisionRect);
+    }
+
+    final fountain = FountainComponent(position: Vector2(1040, 1180));
+    await world.add(fountain);
+    obstacles.add(fountain.collisionRect);
+
+    _treePositions.addAll([
+      Vector2(170, 170),
+      Vector2(340, 210),
+      Vector2(650, 170),
+      Vector2(940, 230),
+      Vector2(1250, 190),
+      Vector2(1840, 190),
+      Vector2(2180, 210),
+      Vector2(2940, 200),
+      Vector2(180, 690),
+      Vector2(1330, 700),
+      Vector2(1820, 730),
+      Vector2(3050, 730),
+      Vector2(180, 1320),
+      Vector2(380, 1450),
+      Vector2(620, 1380),
+      Vector2(1350, 1450),
+      Vector2(1810, 1370),
+      Vector2(2260, 1380),
+      Vector2(2920, 1390),
+      Vector2(200, 2070),
+      Vector2(720, 2070),
+      Vector2(1320, 2050),
+      Vector2(1840, 2070),
+      Vector2(2300, 2070),
+      Vector2(3000, 2050),
+    ]);
+
+    for (final position in _treePositions) {
+      await world.add(DecorativeTree(position: position));
+      obstacles.add(
+        Rect.fromCenter(
+          center: Offset(position.x, position.y + 34),
+          width: 48,
+          height: 38,
+        ),
+      );
+    }
+
+    for (double x = 120; x < worldSize.x; x += 310) {
+      await world.add(StreetLight(position: Vector2(x, 875)));
+      await world.add(StreetLight(position: Vector2(x + 145, 1165)));
+      await world.add(StreetLight(position: Vector2(x, 1735)));
+      await world.add(StreetLight(position: Vector2(x + 150, 1980)));
+    }
+
+    final traffic = <TrafficCar>[
+      TrafficCar(
+        position: Vector2(50, 960),
+        horizontal: true,
+        min: -120,
+        max: 3320,
+        speed: 155,
+        bodyColor: const Color(0xFF3F8DD8),
+      ),
+      TrafficCar(
+        position: Vector2(1280, 1060),
+        horizontal: true,
+        min: -120,
+        max: 3320,
+        speed: 120,
+        bodyColor: const Color(0xFFE0A43E),
+      ),
+      TrafficCar(
+        position: Vector2(1550, 250),
+        horizontal: false,
+        min: -120,
+        max: 2320,
+        speed: 105,
+        bodyColor: const Color(0xFFCE4D55),
+      ),
+      TrafficCar(
+        position: Vector2(2560, 1300),
+        horizontal: false,
+        min: 850,
+        max: 2320,
+        speed: 135,
+        bodyColor: const Color(0xFF62B878),
+      ),
+      TrafficCar(
+        position: Vector2(300, 1820),
+        horizontal: true,
+        min: -120,
+        max: 3320,
+        speed: 180,
+        bodyColor: const Color(0xFF8A67D5),
+      ),
+    ];
+
+    await world.addAll(traffic);
   }
 
   Future<void> _addNpcRoster() async {
     npcs.addAll([
       CharacterNpc(
-        position: Vector2(1050, 500),
+        position: Vector2(930, 820),
         archetype: NpcArchetype.explorer,
         showQuestMarker: true,
       ),
       CharacterNpc(
-        position: Vector2(570, 660),
+        position: Vector2(1320, 1210),
         archetype: NpcArchetype.streetRunner,
       ),
       CharacterNpc(
-        position: Vector2(1260, 390),
+        position: Vector2(420, 1640),
         archetype: NpcArchetype.farmer,
       ),
       CharacterNpc(
-        position: Vector2(1470, 850),
+        position: Vector2(2850, 1550),
         archetype: NpcArchetype.forestHunter,
       ),
       CharacterNpc(
-        position: Vector2(850, 940),
+        position: Vector2(1900, 1210),
         archetype: NpcArchetype.youngKnight,
       ),
       CharacterNpc(
-        position: Vector2(390, 890),
+        position: Vector2(1120, 1640),
         archetype: NpcArchetype.mageApprentice,
       ),
       CharacterNpc(
-        position: Vector2(1510, 430),
+        position: Vector2(2700, 830),
         archetype: NpcArchetype.techSpecialist,
       ),
     ]);
@@ -107,96 +356,309 @@ class ShadowGame extends FlameGame with KeyboardEvents {
     }
   }
 
+  Future<void> _addMissionObjects() async {
+    shadowChips.addAll([
+      ShadowChip(position: Vector2(1880, 420)),
+      ShadowChip(position: Vector2(2320, 1240)),
+      ShadowChip(position: Vector2(660, 1540)),
+    ]);
+    await world.addAll(shadowChips);
+
+    playerCar = ParkedCar(
+      position: Vector2(620, 860),
+      modelName: 'Shadow GT',
+      bodyColor: const Color(0xFF8E1E23),
+    );
+    await world.add(playerCar);
+
+    deliveryZone = DeliveryZone(position: Vector2(2860, 1650));
+    await world.add(deliveryZone);
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
 
+    worldClock = (worldClock + dt / 240) % 1;
+    deliveryZone.active =
+        progress.questStage == QuestStage.driveToDropZone;
+
     if (!player.isMounted) return;
 
-    CharacterNpc? nearest;
+    _collectNearbyChips();
+    _checkDeliveryMission();
+    _updateInteraction();
+
+    final controlsEnabled = !modalOpen;
+    player.joystick = controlsEnabled ? joystick : null;
+    if (!controlsEnabled) player.updateKeyboard({});
+  }
+
+  void _collectNearbyChips() {
+    if (progress.questStage != QuestStage.collectShadowChips) return;
+
+    for (final chip in shadowChips) {
+      if (chip.collected || !chip.isMounted) continue;
+      if (player.position.distanceTo(chip.position) < 68) {
+        chip.collected = true;
+        chip.removeFromParent();
+
+        final questFinished = progress.collectShadowChip();
+        if (questFinished) {
+          notification.show(
+            'Tüm çipler toplandı! Leo’ya götür. Ödül hesabına eklendi.',
+            accent: const Color(0xFF9B5CFF),
+            seconds: 4,
+          );
+        } else {
+          notification.show(
+            'Gölge çipi alındı: ${progress.collectedShadowChips} / 3',
+            accent: const Color(0xFF9B5CFF),
+          );
+        }
+      }
+    }
+  }
+
+  void _checkDeliveryMission() {
+    if (_deliveryRewarded ||
+        progress.questStage != QuestStage.driveToDropZone ||
+        !player.vehicleMode) {
+      return;
+    }
+
+    if (deliveryZone.containsPoint(player.position)) {
+      _deliveryRewarded = true;
+      final reward = progress.completeCurrentQuest();
+      notification.show(
+        'Bölüm tamamlandı! +${reward.coins} ₺  +${reward.xp} XP',
+        accent: const Color(0xFFFFD768),
+        seconds: 6,
+      );
+      dialogueBox.show(
+        speaker: 'Görev Kontrol',
+        message:
+            'Teslimat başarıyla tamamlandı. Shadow City artık serbest dolaşıma açık. Mağazaları keşfedebilir, ekipman toplayabilir ve aracını geliştirebilirsin.',
+        accent: const Color(0xFFFFD768),
+      );
+    }
+  }
+
+  void _updateInteraction() {
+    _interactionType = _InteractionType.none;
+    _activeNpc = null;
+    _activeShop = null;
+    _activeCar = null;
+
+    if (modalOpen) {
+      actionButton.enabled = false;
+      actionButton.label = '...';
+      actionButton.icon = '●';
+      return;
+    }
+
+    if (player.vehicleMode) {
+      _interactionType = _InteractionType.exitCar;
+      actionButton.enabled = true;
+      actionButton.label = 'ARAÇTAN İN';
+      actionButton.icon = '↘';
+      return;
+    }
+
     var nearestDistance = double.infinity;
 
     for (final npc in npcs) {
       if (!npc.isMounted) continue;
       final distance = player.position.distanceTo(npc.position);
-      if (distance < nearestDistance) {
+      if (distance < 150 && distance < nearestDistance) {
         nearestDistance = distance;
-        nearest = npc;
+        _interactionType = _InteractionType.npc;
+        _activeNpc = npc;
       }
     }
 
-    activeNpc = nearestDistance < 145 ? nearest : null;
-    interactionButton.enabled = activeNpc != null && !dialogueOpen;
-    interactionButton.label = activeNpc == null ? '...' : 'KONUŞ';
+    for (final shop in shops) {
+      final distance = player.position.distanceTo(shop.interactionPoint);
+      if (distance < 175 && distance < nearestDistance) {
+        nearestDistance = distance;
+        _interactionType = _InteractionType.shop;
+        _activeShop = shop;
+        _activeNpc = null;
+      }
+    }
 
-    player.joystick = dialogueOpen ? null : joystick;
-    if (dialogueOpen) player.updateKeyboard({});
+    if (!playerCar.occupied) {
+      final distance = player.position.distanceTo(playerCar.position);
+      if (distance < 145 && distance < nearestDistance) {
+        _interactionType = _InteractionType.car;
+        _activeCar = playerCar;
+        _activeNpc = null;
+        _activeShop = null;
+      }
+    }
+
+    actionButton.enabled = _interactionType != _InteractionType.none;
+    switch (_interactionType) {
+      case _InteractionType.npc:
+        actionButton.label = 'KONUŞ';
+        actionButton.icon = '●';
+      case _InteractionType.shop:
+        actionButton.label = 'MAĞAZA';
+        actionButton.icon = '₺';
+      case _InteractionType.car:
+        actionButton.label =
+            progress.carUnlocked ? 'ARACA BİN' : 'KİLİTLİ';
+        actionButton.icon = '◆';
+      case _InteractionType.exitCar:
+        actionButton.label = 'ARAÇTAN İN';
+        actionButton.icon = '↘';
+      case _InteractionType.none:
+        actionButton.label = '...';
+        actionButton.icon = '●';
+    }
   }
 
-  void interactWithNpc() {
-    final npc = activeNpc;
-    if (npc == null || !interactionButton.enabled || dialogueOpen) return;
+  void _performInteraction() {
+    switch (_interactionType) {
+      case _InteractionType.npc:
+        _talkToNpc();
+      case _InteractionType.shop:
+        _openShop();
+      case _InteractionType.car:
+        _enterCar();
+      case _InteractionType.exitCar:
+        _exitCar();
+      case _InteractionType.none:
+        break;
+    }
+  }
 
-    dialogueOpen = true;
+  void _talkToNpc() {
+    final npc = _activeNpc;
+    if (npc == null) return;
+
+    var message = npc.dialogue;
+
+    if (npc.archetype == NpcArchetype.explorer &&
+        progress.questStage == QuestStage.talkToExplorer) {
+      final reward = progress.completeCurrentQuest();
+      message =
+          'Shadow City’de üç kayıp gölge çipi var. Onları bulup Leo’ya götür. İlk görevin başladı. +${reward.coins} ₺ ve +${reward.xp} XP kazandın.';
+      notification.show(
+        'Yeni görev: Kayıp Gölge Çipleri',
+        accent: const Color(0xFF9B5CFF),
+      );
+    } else if (npc.archetype == NpcArchetype.techSpecialist &&
+        progress.questStage == QuestStage.talkToTech) {
+      final reward = progress.completeCurrentQuest();
+      message =
+          'Çipler sağlam. Garajdaki Shadow GT’nin kilidini açtım. Önce Ninja Market’ten duman bombası al, sonra gece teslimatına çık. +${reward.coins} ₺ ve +${reward.xp} XP.';
+      notification.show(
+        'Shadow GT aracının kilidi açıldı!',
+        accent: const Color(0xFF35C7FF),
+      );
+    } else if (npc.archetype == NpcArchetype.techSpecialist &&
+        progress.questStage == QuestStage.collectShadowChips) {
+      message =
+          'Henüz üç çipin tamamı sende değil. Mor parıltıları takip et.';
+    }
+
     dialogueBox.show(
       speaker: npc.displayName,
-      message: npc.dialogue,
+      message: message,
       accent: npc.archetype.accent,
     );
   }
 
+  void _openShop() {
+    final shop = _activeShop;
+    if (shop == null) return;
+    shopPanel.show(shop.kind);
+  }
+
+  void _purchaseProduct(StoreProduct product) {
+    if (!progress.spendCoins(product.price)) {
+      notification.show(
+        'Yetersiz bakiye. Bu ürün için ${product.price} ₺ gerekiyor.',
+        accent: const Color(0xFFE23A42),
+      );
+      return;
+    }
+
+    progress.addItem(product.item);
+
+    switch (product.item) {
+      case GameItem.energyDrink:
+        player.applySpeedBoost();
+      case GameItem.turboKit:
+        player.installTurbo();
+      case GameItem.smokeBomb:
+        if (progress.questStage == QuestStage.buySmokeBomb) {
+          final reward = progress.completeCurrentQuest();
+          notification.show(
+            'Hazırlık tamamlandı! Araca bin ve limana git. +${reward.coins} ₺',
+            accent: const Color(0xFFE23A42),
+            seconds: 4,
+          );
+          return;
+        }
+      case GameItem.repairKit:
+      case GameItem.shadowChip:
+        break;
+    }
+
+    notification.show(
+      '${product.item.label} satın alındı.',
+      accent: product.item.color,
+    );
+  }
+
+  void _enterCar() {
+    final car = _activeCar;
+    if (car == null) return;
+
+    if (!progress.carUnlocked) {
+      notification.show(
+        'Araç kilitli. Önce çipleri Leo’ya teslim et.',
+        accent: const Color(0xFFE23A42),
+      );
+      return;
+    }
+
+    car.occupied = true;
+    player.position.setFrom(car.position);
+    player.setVehicleMode(true);
+    notification.show(
+      'Shadow GT aktif. Araçtan inmek için sağdaki düğmeye dokun.',
+      accent: const Color(0xFF35C7FF),
+    );
+  }
+
+  void _exitCar() {
+    player.setVehicleMode(false);
+    playerCar.position = Vector2(
+      (player.position.x + 100)
+          .clamp(70.0, worldSize.x - 70)
+          .toDouble(),
+      player.position.y,
+    );
+    playerCar.occupied = false;
+    notification.show('Araç park edildi.');
+  }
+
   void closeDialogue() {
-    dialogueOpen = false;
     dialogueBox.hide();
   }
 
-  void _buildWorld() {
-    world.add(
-      RectangleComponent(
-        position: Vector2(0, 560),
-        size: Vector2(1800, 170),
-        paint: Paint()..color = const Color(0xFFF3CF8B),
-        priority: -5,
-      ),
-    );
+  void closeShop() {
+    shopPanel.hide();
+  }
 
-    final treePositions = <Vector2>[
-      Vector2(150, 130),
-      Vector2(340, 220),
-      Vector2(700, 120),
-      Vector2(1050, 170),
-      Vector2(1350, 250),
-      Vector2(1550, 140),
-      Vector2(230, 820),
-      Vector2(700, 860),
-      Vector2(1100, 810),
-      Vector2(1450, 900),
-    ];
-
-    for (final position in treePositions) {
-      world.add(TreeComponent(position: position));
-      obstacles.add(
-        Rect.fromCenter(
-          center: Offset(position.x, position.y + 38),
-          width: 50,
-          height: 42,
-        ),
-      );
-    }
-
-    const housePosition = Offset(800, 330);
-    world.add(
-      HouseComponent(
-        position: Vector2(housePosition.dx, housePosition.dy),
-      ),
-    );
-    obstacles.add(
-      Rect.fromCenter(
-        center: Offset(housePosition.dx, housePosition.dy + 45),
-        width: 210,
-        height: 105,
-      ),
-    );
+  String _timeLabel() {
+    final totalMinutes = (worldClock * 24 * 60).floor();
+    final hour = (totalMinutes ~/ 60) % 24;
+    final minute = totalMinutes % 60;
+    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -204,308 +666,33 @@ class ShadowGame extends FlameGame with KeyboardEvents {
     KeyEvent event,
     Set<LogicalKeyboardKey> keysPressed,
   ) {
-    if (dialogueOpen) {
-      if (event is KeyDownEvent &&
-          (event.logicalKey == LogicalKeyboardKey.escape ||
-              event.logicalKey == LogicalKeyboardKey.enter ||
-              event.logicalKey == LogicalKeyboardKey.space)) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      if (dialogueBox.visible) {
         closeDialogue();
+        return KeyEventResult.handled;
       }
+      if (shopPanel.visible) {
+        closeShop();
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (event is KeyDownEvent &&
+        (event.logicalKey == LogicalKeyboardKey.keyE ||
+            event.logicalKey == LogicalKeyboardKey.space)) {
+      if (!modalOpen) {
+        _performInteraction();
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (modalOpen) {
+      player.updateKeyboard({});
       return KeyEventResult.handled;
     }
 
     player.updateKeyboard(keysPressed);
     return KeyEventResult.handled;
-  }
-}
-
-class InteractionButton extends PositionComponent with TapCallbacks {
-  InteractionButton({required this.onPressed})
-      : super(
-          size: Vector2(105, 105),
-          anchor: Anchor.bottomRight,
-          priority: 110,
-        );
-
-  final VoidCallback onPressed;
-  bool enabled = false;
-  String label = '...';
-
-  @override
-  void onGameResize(Vector2 size) {
-    super.onGameResize(size);
-    position = Vector2(size.x - 35, size.y - 35);
-  }
-
-  @override
-  void onTapDown(TapDownEvent event) {
-    if (enabled) onPressed();
-  }
-
-  @override
-  void render(Canvas canvas) {
-    super.render(canvas);
-
-    canvas.drawCircle(
-      const Offset(52.5, 52.5),
-      50,
-      Paint()
-        ..color = enabled
-            ? const Color(0xFF8E1E23)
-            : const Color(0x775D6170),
-    );
-    canvas.drawCircle(
-      const Offset(52.5, 52.5),
-      40,
-      Paint()
-        ..color = enabled
-            ? const Color(0xFFBC2B31)
-            : const Color(0x665D6170),
-    );
-
-    final icon = Paint()..color = Colors.white;
-    canvas.drawCircle(const Offset(52.5, 39), 9, icon);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(36, 51, 33, 18),
-        const Radius.circular(9),
-      ),
-      icon,
-    );
-
-    final text = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: enabled ? Colors.white : Colors.white54,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    text.paint(canvas, Offset((size.x - text.width) / 2, 77));
-  }
-}
-
-class DialogueBox extends PositionComponent with TapCallbacks {
-  DialogueBox({required this.onClose})
-      : super(anchor: Anchor.bottomCenter, priority: 200);
-
-  final VoidCallback onClose;
-  bool visible = false;
-  String speaker = '';
-  String message = '';
-  Color accent = const Color(0xFFBC2B31);
-
-  @override
-  void onGameResize(Vector2 size) {
-    super.onGameResize(size);
-    _resize(size);
-  }
-
-  void _resize(Vector2 screenSize) {
-    final width = screenSize.x > 700 ? 620.0 : screenSize.x - 30;
-    size = Vector2(width, 190);
-    position = Vector2(screenSize.x / 2, screenSize.y - 20);
-  }
-
-  void show({
-    required String speaker,
-    required String message,
-    required Color accent,
-  }) {
-    this.speaker = speaker;
-    this.message = message;
-    this.accent = accent;
-    visible = true;
-  }
-
-  void hide() => visible = false;
-
-  @override
-  void onTapDown(TapDownEvent event) {
-    if (visible) onClose();
-  }
-
-  @override
-  void render(Canvas canvas) {
-    if (!visible) return;
-    super.render(canvas);
-
-    final box = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, size.x - 6, size.y - 10),
-      const Radius.circular(26),
-    );
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(6, 7, size.x - 6, size.y - 7),
-        const Radius.circular(26),
-      ),
-      Paint()..color = const Color(0x55000000),
-    );
-    canvas.drawRRect(box, Paint()..color = const Color(0xF21B2030));
-    canvas.drawRRect(
-      box,
-      Paint()
-        ..color = accent
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
-    );
-
-    canvas.drawCircle(const Offset(62, 67), 38, Paint()..color = accent);
-    canvas.drawCircle(
-      const Offset(62, 56),
-      20,
-      Paint()..color = const Color(0xFFFFC9A5),
-    );
-    canvas.drawArc(
-      const Rect.fromLTWH(42, 36, 40, 34),
-      3.14,
-      3.14,
-      true,
-      Paint()..color = const Color(0xFF3A2A25),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(38, 76, 48, 26),
-        const Radius.circular(13),
-      ),
-      Paint()..color = accent,
-    );
-
-    final speakerPainter = TextPainter(
-      text: TextSpan(
-        text: speaker,
-        style: TextStyle(
-          color: accent,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    speakerPainter.paint(canvas, const Offset(115, 25));
-
-    final messagePainter = TextPainter(
-      text: TextSpan(
-        text: message,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          height: 1.35,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 4,
-    )..layout(maxWidth: size.x - 145);
-    messagePainter.paint(canvas, const Offset(115, 58));
-
-    final closePainter = TextPainter(
-      text: const TextSpan(
-        text: 'Devam etmek için dokun',
-        style: TextStyle(color: Colors.white54, fontSize: 12),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    closePainter.paint(
-      canvas,
-      Offset(size.x - closePainter.width - 25, size.y - 37),
-    );
-  }
-}
-
-class TreeComponent extends PositionComponent {
-  TreeComponent({required super.position})
-      : super(
-          size: Vector2(110, 140),
-          anchor: Anchor.center,
-          priority: 2,
-        );
-
-  @override
-  void render(Canvas canvas) {
-    super.render(canvas);
-    canvas.drawOval(
-      const Rect.fromLTWH(16, 110, 80, 22),
-      Paint()..color = const Color(0x28000000),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(45, 68, 22, 54),
-        const Radius.circular(8),
-      ),
-      Paint()..color = const Color(0xFF915E38),
-    );
-    canvas.drawCircle(
-      const Offset(55, 50),
-      44,
-      Paint()..color = const Color(0xFF2EAA52),
-    );
-    canvas.drawCircle(
-      const Offset(36, 39),
-      29,
-      Paint()..color = const Color(0xFF50D86D),
-    );
-    canvas.drawCircle(
-      const Offset(74, 35),
-      27,
-      Paint()..color = const Color(0xFF50D86D),
-    );
-  }
-}
-
-class HouseComponent extends PositionComponent {
-  HouseComponent({required super.position})
-      : super(
-          size: Vector2(260, 210),
-          anchor: Anchor.center,
-          priority: 2,
-        );
-
-  @override
-  void render(Canvas canvas) {
-    super.render(canvas);
-    canvas.drawOval(
-      const Rect.fromLTWH(20, 180, 220, 25),
-      Paint()..color = const Color(0x28000000),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(28, 72, 205, 116),
-        const Radius.circular(18),
-      ),
-      Paint()..color = const Color(0xFFFFD86C),
-    );
-
-    final roof = Path()
-      ..moveTo(10, 85)
-      ..lineTo(130, 8)
-      ..lineTo(250, 85)
-      ..close();
-    canvas.drawPath(roof, Paint()..color = const Color(0xFFEC6262));
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(103, 124, 54, 64),
-        const Radius.circular(9),
-      ),
-      Paint()..color = const Color(0xFF5C8FF3),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(52, 105, 42, 42),
-        const Radius.circular(8),
-      ),
-      Paint()..color = const Color(0xFF8BE4FF),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(169, 105, 42, 42),
-        const Radius.circular(8),
-      ),
-      Paint()..color = const Color(0xFF8BE4FF),
-    );
   }
 }
